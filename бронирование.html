@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Система онлайн-записи</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      body {
+          font-family: 'Inter', sans-serif;
+          background-color: #f8fafc;
+      }
+      .glass-card {
+          background: rgba(255, 255, 255, 0.8);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-800">
+    <div id="app"></div>
+
+    <script>
+      // Инициализация данных (Mock Database)
+      let state = {
+          user: JSON.parse(localStorage.getItem('booking_user')) || null,
+          view: 'home', // 'home', 'client_dashboard', 'admin_dashboard'
+          slots: JSON.parse(localStorage.getItem('booking_slots')) || [
+              { id: 1, date: '2026-05-18', time: '10:00', bookedBy: null, status: 'available' },
+              { id: 2, date: '2026-05-18', time: '12:00', bookedBy: null, status: 'available' },
+              { id: 3, date: '2026-05-19', time: '15:30', bookedBy: 'Petr', status: 'confirmed' }
+          ]
+      };
+
+      function save() {
+          localStorage.setItem('booking_slots', JSON.stringify(state.slots));
+          localStorage.setItem('booking_user', JSON.stringify(state.user));
+      }
+
+      function navigate(view) {
+          state.view = view;
+          render();
+      }
+
+      function login(role, name) {
+          state.user = { role, name };
+          state.view = role === 'admin' ? 'admin_dashboard' : 'client_dashboard';
+          save();
+          render();
+      }
+
+      function logout() {
+          state.user = null;
+          state.view = 'home';
+          save();
+          render();
+      }
+
+      function bookSlot(slotId) {
+          const slot = state.slots.find(s => s.id === slotId);
+          if (slot && !slot.bookedBy) {
+              slot.bookedBy = state.user.name;
+              slot.status = 'pending';
+              save();
+              render();
+          }
+      }
+
+      function addSlot(e) {
+          e.preventDefault();
+          const date = document.getElementById('new-date').value;
+          const time = document.getElementById('new-time').value;
+          if (date && time) {
+              state.slots.push({
+                  id: Date.now(),
+                  date,
+                  time,
+                  bookedBy: null,
+                  status: 'available'
+              });
+              save();
+              render();
+          }
+      }
+
+      function updateSlotStatus(slotId, newStatus) {
+          const slot = state.slots.find(s => s.id === slotId);
+          if (slot) {
+              if (newStatus === 'deleted') {
+                  state.slots = state.slots.filter(s => s.id !== slotId);
+              } else {
+                  slot.status = newStatus;
+              }
+              save();
+              render();
+          }
+      }
+
+      // Компоненты
+      function Navbar() {
+          return `
+              <nav class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                  <h1 class="text-xl font-bold text-indigo-600">BookingPro</h1>
+                  <div class="flex items-center gap-4">
+                      ${state.user ? `
+                          <span class="text-sm text-slate-500 font-medium">${state.user.name} (${state.user.role === 'admin' ? 'Админ' : 'Клиент'})</span>
+                          <button onclick="logout()" class="text-sm text-red-500 hover:underline">Выйти</button>
+                      ` : `
+                          <button onclick="navigate('home')" class="text-sm font-medium">Вход</button>
+                      `}
+                  </div>
+              </nav>
+          `;
+      }
+
+      function Home() {
+          return `
+              <div class="max-w-md mx-auto mt-20 p-8 glass-card rounded-2xl shadow-xl space-y-6">
+                  <div class="text-center">
+                      <h2 class="text-2xl font-bold">Добро пожаловать</h2>
+                      <p class="text-slate-500 mt-2">Выберите режим для тестирования приложения</p>
+                  </div>
+                  <div class="grid grid-cols-1 gap-4">
+                      <button onclick="login('client', 'Алексей')" class="bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition">
+                          Войти как Клиент
+                      </button>
+                      <button onclick="login('admin', 'Мария')" class="bg-slate-800 text-white py-3 rounded-xl font-medium hover:bg-slate-900 transition">
+                          Войти как Администратор
+                      </button>
+                  </div>
+              </div>
+          `;
+      }
+
+      function ClientDashboard() {
+          const myBookings = state.slots.filter(s => s.bookedBy === state.user.name);
+          const availableSlots = state.slots.filter(s => !s.bookedBy);
+
+          return `
+              <div class="max-w-4xl mx-auto p-6 space-y-10">
+                  <section>
+                      <h2 class="text-2xl font-bold mb-6">Доступное время</h2>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                          ${availableSlots.length ? availableSlots.map(slot => `
+                              <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                  <div class="text-indigo-600 font-bold text-lg mb-1">${slot.time}</div>
+                                  <div class="text-slate-500 text-sm mb-4">${slot.date}</div>
+                                  <button onclick="bookSlot(${slot.id})" class="w-full bg-indigo-50 text-indigo-600 font-semibold py-2 rounded-lg hover:bg-indigo-100 transition">
+                                      Записаться
+                                  </button>
+                              </div>
+                          `).join('') : '<p class="text-slate-400">Нет доступных слотов</p>'}
+                      </div>
+                  </section>
+
+                  <section>
+                      <h2 class="text-2xl font-bold mb-6">Мои записи</h2>
+                      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                          <table class="w-full text-left">
+                              <thead class="bg-slate-50">
+                                  <tr>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Дата</th>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Время</th>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Статус</th>
+                                  </tr>
+                              </thead>
+                              <tbody class="divide-y divide-slate-100">
+                                  ${myBookings.length ? myBookings.map(b => `
+                                      <tr>
+                                          <td class="px-6 py-4">${b.date}</td>
+                                          <td class="px-6 py-4 font-medium">${b.time}</td>
+                                          <td class="px-6 py-4">
+                                              <span class="px-2 py-1 text-xs rounded-full ${b.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                                                  ${b.status === 'confirmed' ? 'Подтверждено' : 'Ожидает'}
+                                              </span>
+                                          </td>
+                                      </tr>
+                                  `).join('') : '<tr><td colspan="3" class="px-6 py-8 text-center text-slate-400">У вас пока нет записей</td></tr>'}
+                              </tbody>
+                          </table>
+                      </div>
+                  </section>
+              </div>
+          `;
+      }
+
+      function AdminDashboard() {
+          return `
+              <div class="max-w-5xl mx-auto p-6 space-y-10">
+                  <section class="glass-card p-6 rounded-2xl border border-slate-200">
+                      <h2 class="text-xl font-bold mb-4">Добавить новое время</h2>
+                      <form onsubmit="addSlot(event)" class="flex flex-wrap gap-4">
+                          <input type="date" id="new-date" required class="px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                          <input type="time" id="new-time" required class="px-4 py-2 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                          <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-medium hover:bg-indigo-700 transition">
+                              Создать слот
+                          </button>
+                      </form>
+                  </section>
+
+                  <section>
+                      <h2 class="text-2xl font-bold mb-6">Все записи и расписание</h2>
+                      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                          <table class="w-full text-left">
+                              <thead class="bg-slate-50">
+                                  <tr>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Клиент</th>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Дата/Время</th>
+                                      <th class="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Статус</th>
+                                      <th class="px-6 py-4 flex justify-end text-xs font-semibold text-slate-500 uppercase">Действия</th>
+                                  </tr>
+                              </thead>
+                              <tbody class="divide-y divide-slate-100">
+                                  ${state.slots.map(s => `
+                                      <tr>
+                                          <td class="px-6 py-4">
+                                              ${s.bookedBy ? `<div class="font-medium">${s.bookedBy}</div>` : `<span class="text-slate-400 font-normal italic">Свободно</span>`}
+                                          </td>
+                                          <td class="px-6 py-4 text-sm font-medium text-slate-600">
+                                              <div>${s.date}</div>
+                                              <div class="text-slate-400">${s.time}</div>
+                                          </td>
+                                          <td class="px-6 py-4">
+                                              <span class="px-2 py-1 text-xs rounded-full ${s.status === 'confirmed' ? 'bg-green-100 text-green-700' : s.status === 'available' ? 'bg-slate-100 text-slate-600' : 'bg-yellow-100 text-yellow-700'}">
+                                                  ${s.status === 'confirmed' ? 'Подтверждено' : s.status === 'available' ? 'Свободно' : 'Ожидает'}
+                                              </span>
+                                          </td>
+                                          <td class="px-6 py-4">
+                                              <div class="flex justify-end gap-2">
+                                                  ${s.status === 'pending' ? `
+                                                      <button onclick="updateSlotStatus(${s.id}, 'confirmed')" class="text-xs bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600">Подтвердить</button>
+                                                  ` : ''}
+                                                  <button onclick="updateSlotStatus(${s.id}, 'deleted')" class="text-xs bg-red-50 text-red-500 px-3 py-1 rounded-lg hover:bg-red-100">Удалить</button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  `).join('')}
+                              </tbody>
+                          </table>
+                      </div>
+                  </section>
+              </div>
+          `;
+      }
+
+      function render() {
+          const app = document.getElementById('app');
+          let content = Navbar();
+
+          if (state.view === 'home') content += Home();
+          else if (state.view === 'client_dashboard') content += ClientDashboard();
+          else if (state.view === 'admin_dashboard') content += AdminDashboard();
+
+          app.innerHTML = content;
+      }
+
+      // Запуск
+      if (state.user) {
+          state.view = state.user.role === 'admin' ? 'admin_dashboard' : 'client_dashboard';
+      }
+      render();
+    </script>
+  </body>
+</html>
