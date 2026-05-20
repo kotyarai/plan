@@ -1,0 +1,118 @@
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(20),
+    registration_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_admin BOOLEAN DEFAULT FALSE 
+);
+CREATE TABLE services (
+    service_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    duration_minutes INT NOT NULL CHECK (duration_minutes > 0)
+
+CREATE TABLE available_slots (
+    slot_id SERIAL PRIMARY KEY,
+    service_id INT NOT NULL,
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL, 
+    end_time TIMESTAMP WITH TIME ZONE NOT NULL,  
+    interval_minutes INT NOT NULL CHECK (interval_minutes > 0), 
+    max_bookings_per_interval INT DEFAULT 1 CHECK (max_bookings_per_interval >= 0), 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_slot_service
+        FOREIGN KEY (service_id)
+        REFERENCES services(service_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT check_slot_times CHECK (end_time > start_time)
+);
+
+CREATE TABLE bookings (
+    booking_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,   
+    service_id INT,         
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL, 
+    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    booking_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, 
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+    notes TEXT,
+
+    CONSTRAINT fk_booking_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_booking_service
+        FOREIGN KEY (service_id)
+        REFERENCES services(service_id)
+        ON DELETE SET NULL, 
+
+    CONSTRAINT check_booking_times CHECK (end_time > start_time),из допустимых
+    CONSTRAINT check_booking_status CHECK (status IN ('Pending', 'Confirmed', 'Cancelled', 'Completed'))
+);
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_available_slots_updated_at
+BEFORE UPDATE ON available_slots
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+INSERT INTO users (first_name, last_name, email, password_hash, phone_number, is_admin) VALUES
+('Иван', 'Петров', 'ivan.petrov@example.com', '$2b$10$s51o.c8vQx1LzP/u9yY48eYqf.l8Y2N3L5g4c.a.oB2V8m7N1F4g0', '79001112233', FALSE),
+('Мария', 'Сидорова', 'admin@example.com', '$2b$10$g2h3i4j5k6l7m8n9o0p1q2r3s4t5u6v7w8x9y0z1a2b3c4d5e6f7g8h9', '79105556677', TRUE);
+
+-- 2. Заполнение services (примеры)
+INSERT INTO services (name, description, duration_minutes) VALUES
+('Стрижка мужская', 'Классическая мужская стрижка', 30),
+('Стрижка женская', 'Женская стрижка любой сложности', 60),
+('Окрашивание волос', 'Полное окрашивание волос', 120);
+INSERT INTO available_slots (service_id, start_time, end_time, interval_minutes, max_bookings_per_interval) VALUES
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 10:00:00+03', '2024-07-20 10:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 10:30:00+03', '2024-07-20 11:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 11:00:00+03', '2024-07-20 11:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 11:30:00+03', '2024-07-20 12:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 12:00:00+03', '2024-07-20 12:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 12:30:00+03', '2024-07-20 13:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 14:00:00+03', '2024-07-20 14:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 14:30:00+03', '2024-07-20 15:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 15:00:00+03', '2024-07-20 15:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 15:30:00+03', '2024-07-20 16:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 16:00:00+03', '2024-07-20 16:30:00+03', 30, 1),
+( (SELECT service_id FROM services
+
+
+WHERE name = 'Стрижка мужская'), '2024-07-20 16:30:00+03', '2024-07-20 17:00:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 17:00:00+03', '2024-07-20 17:30:00+03', 30, 1),
+( (SELECT service_id FROM services WHERE name = 'Стрижка мужская'), '2024-07-20 17:30:00+03', '2024-07-20 18:00:00+03', 30, 1);
+INSERT INTO bookings (user_id, service_id, start_time, end_time, status, notes) VALUES
+(
+    1,
+    (SELECT service_id FROM services WHERE name = 'Стрижка мужская'),
+    '2024-07-20 10:00:00+03', '2024-07-20 10:30:00+03',
+    'Confirmed', 'Хочу подстричься, как обычно.'
+);
+INSERT INTO bookings (user_id, service_id, start_time, end_time, status, notes) VALUES
+(
+    1, 
+    (SELECT service_id FROM services WHERE name = 'Стрижка мужская'),
+    '2024-07-20 14:30:00+03', '2024-07-20 15:00:00+03',
+    'Pending', 'Пожалуйста, сделайте укладку.'
+);
+
+INSERT INTO bookings (user_id, service_id, start_time, end_time, status, notes) VALUES
+(
+    2,
+    (SELECT service_id FROM services WHERE name = 'Стрижка женская'),
+    '2024-07-20 11:30:00+03', '2024-07-20 12:30:00+03',
+    'Confirmed', 'Запись для VIP-клиента.'
+);
